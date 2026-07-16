@@ -48,23 +48,36 @@ class FaissStore(VectorStore):
             self._int_to_str_id[int_id] = str_id
         self._persist()
 
-    def query(self, vector: np.ndarray, top_k: int) -> list[tuple[str, float, dict]]:
+    def query(
+        self,
+        vector: np.ndarray,
+        top_k: int,
+        filter_metadata: dict[str, str] | None = None,
+    ) -> list[tuple[str, float, dict]]:
         if self._index.ntotal == 0:
             return []
+
+        # IndexFlatIP is already an exact brute-force search, so filtering just means:
+        # score everything, keep results in score order, drop non-matches, take top_k.
+        # Fine at FAISS's typical local/dev scale; avoids under-fetching a smaller
+        # candidate window and missing a valid match.
+        search_k = self._index.ntotal if filter_metadata else top_k
         scores, int_ids = self._index.search(
-            vector.reshape(1, -1).astype("float32"), top_k
+            vector.reshape(1, -1).astype("float32"), search_k
         )
+
         results = []
         for score, int_id in zip(scores[0], int_ids[0]):
             if int_id == -1:
                 continue
-            results.append(
-                (
-                    self._int_to_str_id[int_id],
-                    float(score),
-                    self._id_to_metadata[int_id],
-                )
-            )
+            metadata = self._id_to_metadata[int_id]
+            if filter_metadata and not all(
+                metadata.get(k) == v for k, v in filter_metadata.items()
+            ):
+                continue
+            results.append((self._int_to_str_id[int_id], float(score), metadata))
+            if len(results) >= top_k:
+                break
         return results
 
     def _persist(self) -> None:

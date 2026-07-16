@@ -37,6 +37,41 @@ def test_faiss_store_upsert_and_query_orders_by_cosine_similarity(tmp_path):
     assert scores == sorted(scores, reverse=True)
 
 
+def test_faiss_store_query_filters_by_metadata(tmp_path):
+    store = FaissStore(index_dir=tmp_path, index_name="filter_test", dimension=4)
+
+    vectors = _normalize(
+        np.array(
+            [
+                [1.0, 0.0, 0.0, 0.0],  # doc1, exact match
+                [0.9, 0.1, 0.0, 0.0],  # doc2, would rank #2 overall if unfiltered
+                [0.5, 0.5, 0.0, 0.0],  # doc1, weaker match
+                [0.0, 1.0, 0.0, 0.0],  # doc2, orthogonal
+            ],
+            dtype="float32",
+        )
+    )
+    ids = ["a1", "b2", "c1", "d2"]
+    metadatas = [
+        {"text": "a1", "document_hash": "doc1"},
+        {"text": "b2", "document_hash": "doc2"},
+        {"text": "c1", "document_hash": "doc1"},
+        {"text": "d2", "document_hash": "doc2"},
+    ]
+    store.upsert(ids=ids, vectors=vectors, metadatas=metadatas)
+
+    query_vector = _normalize(np.array([1.0, 0.0, 0.0, 0.0], dtype="float32"))
+    results = store.query(
+        query_vector, top_k=2, filter_metadata={"document_hash": "doc1"}
+    )
+
+    # doc2's "b2" would rank #2 overall (0.9 sim > 0.5 sim of "c1"), but the filter
+    # must exclude it entirely rather than just deprioritize it.
+    result_ids = [r[0] for r in results]
+    assert result_ids == ["a1", "c1"]
+    assert all(r[2]["document_hash"] == "doc1" for r in results)
+
+
 def test_faiss_store_persists_and_reloads(tmp_path):
     dimension = 4
     vectors = _normalize(np.array([[1.0, 0.0, 0.0, 0.0]], dtype="float32"))

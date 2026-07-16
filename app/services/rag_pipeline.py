@@ -179,12 +179,16 @@ def ingest(pdf_path: str | Path, filename: str | None = None) -> IngestResult:
 
 
 @traceable(name="retrieve_context", run_type="retriever")
-def retrieve(question: str, top_k: int | None = None) -> list[SourceChunk]:
+def retrieve(
+    question: str, top_k: int | None = None, document_hash: str | None = None
+) -> list[SourceChunk]:
     """Embed the question, retrieve cosine-similar candidates from the vector store,
     and rerank them with a cross-encoder for precision. Shared by both the
-    non-streaming and streaming query paths."""
+    non-streaming and streaming query paths. If document_hash is given, results are
+    scoped to that single ingested document."""
     settings = get_settings()
     top_k = top_k or settings.top_k
+    filter_metadata = {"document_hash": document_hash} if document_hash else None
 
     query_vector = embed_query(question)
     vector_store = get_vector_store()
@@ -193,7 +197,9 @@ def retrieve(question: str, top_k: int | None = None) -> list[SourceChunk]:
         if settings.reranker_enabled
         else top_k
     )
-    matches = vector_store.query(query_vector, top_k=candidate_pool)
+    matches = vector_store.query(
+        query_vector, top_k=candidate_pool, filter_metadata=filter_metadata
+    )
     matches = rerank(question, matches, top_k=top_k)
 
     return [
@@ -215,9 +221,10 @@ def query(
     top_k: int | None = None,
     temperature: float | None = None,
     top_p: float | None = None,
+    document_hash: str | None = None,
 ) -> QueryResult:
     """Retrieve context and ask the chat model to synthesize a grounded answer."""
-    sources = retrieve(question, top_k=top_k)
+    sources = retrieve(question, top_k=top_k, document_hash=document_hash)
     answer = generate_answer(
         question,
         [source.text for source in sources],

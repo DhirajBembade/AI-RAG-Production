@@ -13,6 +13,13 @@ class VectorStore(ABC):
     ) -> None: ...
 
     @abstractmethod
-    def query(self, vector: np.ndarray, top_k: int) -> list[tuple[str, float, dict]]:
-        """Return [(id, cosine_similarity_score, metadata), ...] ordered best match first."""
+    def query(
+        self,
+        vector: np.ndarray,
+        top_k: int,
+        filter_metadata: dict[str, str] | None = None,
+    ) -> list[tuple[str, float, dict]]:
+        """Return [(id, cosine_similarity_score, metadata), ...] ordered best match first.
+        filter_metadata, if given, is an exact-match AND filter over stored metadata
+        (e.g. {"document_hash": "..."} to scope results to a single document)."""
         ...

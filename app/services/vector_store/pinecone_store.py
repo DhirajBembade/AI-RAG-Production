@@ -43,9 +43,22 @@ class PineconeStore(VectorStore):
         ]
         self._index.upsert(vectors=payload)
 
-    def query(self, vector: np.ndarray, top_k: int) -> list[tuple[str, float, dict]]:
+    def query(
+        self,
+        vector: np.ndarray,
+        top_k: int,
+        filter_metadata: dict[str, str] | None = None,
+    ) -> list[tuple[str, float, dict]]:
+        query_filter = (
+            {key: {"$eq": value} for key, value in filter_metadata.items()}
+            if filter_metadata
+            else None
+        )
         response = self._index.query(
-            vector=vector.tolist(), top_k=top_k, include_metadata=True
+            vector=vector.tolist(),
+            top_k=top_k,
+            include_metadata=True,
+            filter=query_filter,
         )
         return [
             (match.id, float(match.score), match.metadata or {})

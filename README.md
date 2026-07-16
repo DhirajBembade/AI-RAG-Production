@@ -106,10 +106,18 @@ curl http://localhost:8000/health
 curl -X POST http://localhost:8000/upload \
   -F "file=@data/attention_is_all_you_need.pdf"
 
-# Ask a question (non-streaming)
+# List everything that's been ingested (filename, hash, page/chunk/image counts)
+curl http://localhost:8000/documents
+
+# Ask a question (non-streaming), searched across every ingested document
 curl -X POST http://localhost:8000/chat \
   -H "Content-Type: application/json" \
   -d '{"question": "What optimizer did they use?", "top_k": 4}'
+
+# Ask a question scoped to a single document — get the hash from /documents first
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What optimizer did they use?", "document_hash": "<hash from /documents>"}'
 
 # Ask a question (streaming, Server-Sent Events)
 curl -N -X POST http://localhost:8000/chat/stream \
@@ -118,6 +126,14 @@ curl -N -X POST http://localhost:8000/chat/stream \
 ```
 
 Interactive docs: `http://localhost:8000/docs`
+
+**Document-scoped filtering:** by default `/chat` and `/chat/stream` search across every
+ingested document at once. Pass `document_hash` (from `/documents`) to restrict retrieval
+to a single document — useful once you've ingested more than one PDF and want an
+unambiguous answer from a specific source. In the Streamlit UI this is the "Scope
+questions to a document" selector in the sidebar. FAISS filters by scoring every stored
+vector and dropping non-matches (fine at local/dev scale, since `IndexFlatIP` is already
+exact brute-force search); Pinecone uses its native metadata filter.
 
 ## Running checks locally (mirrors CI exactly)
 

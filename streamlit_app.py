@@ -84,6 +84,25 @@ with st.sidebar:
                 st.error(str(exc))
 
     st.divider()
+    st.subheader("Filter")
+    try:
+        documents_response = requests.get(f"{api_base_url}/documents", timeout=10)
+        documents_response.raise_for_status()
+        documents = documents_response.json()["documents"]
+    except Exception:
+        documents = []
+
+    doc_options: dict[str, str | None] = {"All documents": None}
+    for doc in documents:
+        label = f"{doc['filename']} ({doc['chunk_count']} chunks)"
+        doc_options[label] = doc["document_hash"]
+
+    selected_doc_label = st.selectbox(
+        "Scope questions to a document", list(doc_options.keys())
+    )
+    document_hash = doc_options[selected_doc_label]
+
+    st.divider()
     st.subheader("Generation")
     top_k = st.slider("top_k (chunks retrieved)", 1, 10, 4)
     temperature = st.slider("temperature", 0.0, 1.5, 0.7, 0.05)
@@ -94,6 +113,8 @@ st.caption(
     "Ask a question about the PDFs you've ingested. Retrieval → cross-encoder rerank → "
     "streamed answer, exactly as the backend runs it."
 )
+if document_hash:
+    st.info(f"Scoped to: **{selected_doc_label}**", icon="🎯")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -122,6 +143,7 @@ if question:
                     "top_k": top_k,
                     "temperature": temperature,
                     "top_p": top_p,
+                    "document_hash": document_hash,
                 },
                 stream=True,
                 timeout=300,

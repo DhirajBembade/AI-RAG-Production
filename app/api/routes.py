@@ -11,6 +11,8 @@ from app.config.settings import get_settings
 from app.models.schemas import (
     ChatRequest,
     ChatResponse,
+    DocumentInfo,
+    DocumentListResponse,
     HealthResponse,
     IngestResponse,
     SourceChunkResponse,
@@ -22,6 +24,7 @@ from app.services.guardrails import (
 )
 from app.services.llm import generate_answer_stream
 from app.services.rag_pipeline import ingest, query, retrieve
+from app.utils.metadata_store import MetadataStore
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -51,6 +54,26 @@ def _apply_input_guardrails(question: str) -> str:
 @router.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse(status="OK")
+
+
+@router.get("/documents", response_model=DocumentListResponse)
+def list_documents() -> DocumentListResponse:
+    settings = get_settings()
+    metadata_store = MetadataStore(settings.metadata_db_path)
+    documents = metadata_store.list_documents()
+    return DocumentListResponse(
+        documents=[
+            DocumentInfo(
+                document_hash=doc.hash,
+                filename=doc.filename,
+                ingested_at=doc.ingested_at,
+                page_count=doc.page_count,
+                chunk_count=doc.chunk_count,
+                image_count=doc.image_count,
+            )
+            for doc in documents
+        ]
+    )
 
 
 @router.post("/upload", response_model=IngestResponse)
@@ -86,6 +109,7 @@ def chat(request: ChatRequest) -> ChatResponse:
             top_k=request.top_k,
             temperature=request.temperature,
             top_p=request.top_p,
+            document_hash=request.document_hash,
         )
     except Exception as exc:
         logger.exception("Query failed for question=%r", question)
@@ -112,7 +136,9 @@ def chat_stream(request: ChatRequest) -> StreamingResponse:
 
     def event_stream():
         try:
-            sources = retrieve(question, top_k=request.top_k)
+            sources = retrieve(
+                question, top_k=request.top_k, document_hash=request.document_hash
+            )
             yield _sse(
                 {"type": "sources", "sources": [asdict(source) for source in sources]}
             )

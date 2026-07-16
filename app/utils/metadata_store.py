@@ -75,6 +75,13 @@ class MetadataStore:
             ).fetchone()
             return DocumentRecord(**dict(row)) if row else None
 
+    def list_documents(self) -> list[DocumentRecord]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM documents ORDER BY ingested_at DESC"
+            ).fetchall()
+            return [DocumentRecord(**dict(row)) for row in rows]
+
     def upsert_document(
         self,
         doc_hash: str,
