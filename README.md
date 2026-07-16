@@ -10,27 +10,34 @@ and get answers grounded in retrieved, reranked context, streamed token-by-token
 
 ## Architecture
 
-```
-                         ┌─────────────────────────────────────────────┐
-                         │                 Ingestion                    │
-PDF ──▶ PyMuPDF (fitz) ──┼─▶ native text layer ─────────────────────────┼─┐
-                         │─▶ embedded images ──▶ vision caption ────────┼─┤
-                         │─▶ low-text pages ──▶ page render ──▶ OCR ────┼─┤
-                         └─────────────────────────────────────────────┘ │
-                                                                          ▼
-                                            chunk ─▶ SHA256 dedup ─▶ embed (text-embedding-3-small)
-                                                                          │
-                                                                          ▼
-                                          FAISS (local) or Pinecone (cloud) — cosine similarity
-                                                     + SQLite metadata registry
+```mermaid
+flowchart TD
+    subgraph Ingestion["Ingestion"]
+        PDF["PDF"] --> Extract["PyMuPDF (fitz)"]
+        Extract --> Text["Native text layer"]
+        Extract --> Images["Embedded images"]
+        Extract --> LowText["Low-text pages"]
+        Images --> Caption["Vision caption"]
+        LowText --> Render["Page render"] --> OCR["Tesseract OCR"]
+        Text --> Chunk["Chunk + SHA256 dedup"]
+        Caption --> Chunk
+        OCR --> Chunk
+        Chunk --> Embed["Embed (text-embedding-3-small)"]
+    end
 
-                         ┌─────────────────────────────────────────────┐
-                         │                   Query                      │
-Question ──▶ embed ──▶ vector search (top ~20) ──▶ BGE cross-encoder rerank (top_k)
-                                                                          │
-                                                                          ▼
-                                        gpt-5-mini (Azure) ──▶ streamed, grounded answer
-                                        (falls back to OpenAI if Azure rejects the call)
+    Embed --> Store[("FAISS / Pinecone — cosine similarity")]
+    Store --> Meta[("SQLite metadata registry")]
+
+    subgraph Query["Query"]
+        Question["Question"] --> QEmbed["Embed"]
+        QEmbed --> Search["Vector search (top ~20)"]
+        Search --> Rerank["BGE cross-encoder rerank (top_k)"]
+        Rerank --> LLM["gpt-5-mini (Azure)"]
+        LLM --> Answer["Streamed, grounded answer"]
+        LLM -. "falls back on rejection" .-> OpenAI["OpenAI gpt-4o-mini"]
+    end
+
+    Store --> Search
 ```
 
 **Clients:** the FastAPI backend (`app/`) is the single source of truth. `streamlit_app.py`
