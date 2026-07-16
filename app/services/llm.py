@@ -1,6 +1,7 @@
 import logging
 from collections.abc import Iterator
 
+from langsmith import traceable
 from openai import AzureOpenAI, OpenAI
 
 from app.config.settings import get_settings
@@ -78,6 +79,7 @@ def _answer_with_openai(
     return (response.choices[0].message.content or "").strip()
 
 
+@traceable(name="generate_answer", run_type="llm")
 def generate_answer(
     question: str,
     context_chunks: list[str],
@@ -143,6 +145,7 @@ def _stream_with_openai(
     yield from _stream_delta_tokens(stream)
 
 
+@traceable(name="generate_answer_stream", run_type="llm")
 def generate_answer_stream(
     question: str,
     context_chunks: list[str],

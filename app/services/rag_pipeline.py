@@ -2,6 +2,8 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
+from langsmith import traceable
+
 from app.config.settings import get_settings
 from app.services.chunker import chunk_text
 from app.services.embeddings import embed_query, embed_texts
@@ -47,6 +49,7 @@ def _get_metadata_store() -> MetadataStore:
     return MetadataStore(settings.metadata_db_path)
 
 
+@traceable(name="ingest_pdf", run_type="chain")
 def ingest(pdf_path: str | Path, filename: str | None = None) -> IngestResult:
     """Full ingestion pipeline: hash -> dedup check -> extract (text + OCR + images) ->
     caption images -> chunk -> dedup chunks -> embed -> upsert into the vector store."""
@@ -175,6 +178,7 @@ def ingest(pdf_path: str | Path, filename: str | None = None) -> IngestResult:
     )
 
 
+@traceable(name="retrieve_context", run_type="retriever")
 def retrieve(question: str, top_k: int | None = None) -> list[SourceChunk]:
     """Embed the question, retrieve cosine-similar candidates from the vector store,
     and rerank them with a cross-encoder for precision. Shared by both the
@@ -205,6 +209,7 @@ def retrieve(question: str, top_k: int | None = None) -> list[SourceChunk]:
     ]
 
 
+@traceable(name="rag_query", run_type="chain")
 def query(
     question: str,
     top_k: int | None = None,

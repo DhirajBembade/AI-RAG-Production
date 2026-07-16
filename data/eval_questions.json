@@ -1,0 +1,22 @@
+[
+  {
+    "question": "What is the main innovation introduced by the Transformer architecture?",
+    "reference": "The Transformer relies entirely on self-attention mechanisms to draw global dependencies between input and output, dispensing with recurrence and convolutions entirely."
+  },
+  {
+    "question": "How many layers are in the encoder and decoder stacks?",
+    "reference": "Both the encoder and decoder are composed of a stack of 6 identical layers (N=6)."
+  },
+  {
+    "question": "What optimizer was used to train the model?",
+    "reference": "The Adam optimizer, with beta1=0.9, beta2=0.98, and epsilon=1e-9, using a learning rate that increases linearly for warmup steps then decreases proportionally to the inverse square root of the step number."
+  },
+  {
+    "question": "What is the dimensionality of the model (d_model) used in the base Transformer?",
+    "reference": "512."
+  },
+  {
+    "question": "How many attention heads are used in the multi-head attention mechanism of the base model?",
+    "reference": "8 parallel attention heads."
+  }
+]

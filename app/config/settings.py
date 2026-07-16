@@ -62,6 +62,12 @@ class Settings(BaseSettings):
     cohere_api_key: str = ""
     jina_api_key: str = ""
 
+    # --- Guardrails ---
+    guardrails_prompt_injection_enabled: bool = True
+    guardrails_pii_redaction_enabled: bool = (
+        True  # requires presidio + spaCy en_core_web_sm
+    )
+
     # --- Storage ---
     data_dir: Path = BASE_DIR / "data"
     extracted_images_dir: Path = BASE_DIR / "data" / "extracted_images"

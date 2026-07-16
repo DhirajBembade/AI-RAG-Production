@@ -14,6 +14,7 @@ locally via sentence-transformers — no API key required. Alternative managed r
 import logging
 from functools import lru_cache
 
+from langsmith import traceable
 from sentence_transformers import CrossEncoder
 
 from app.config.settings import get_settings
@@ -29,6 +30,7 @@ def _get_cross_encoder() -> CrossEncoder:
     return CrossEncoder(settings.reranker_model)
 
 
+@traceable(name="rerank", run_type="chain")
 def rerank(
     question: str,
     candidates: list[Candidate],

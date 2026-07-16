@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
+from app.config.settings import get_settings
 from app.models.schemas import (
     ChatRequest,
     ChatResponse,
@@ -14,11 +15,37 @@ from app.models.schemas import (
     IngestResponse,
     SourceChunkResponse,
 )
+from app.services.guardrails import (
+    PromptInjectionDetected,
+    check_prompt_injection,
+    redact_pii,
+)
 from app.services.llm import generate_answer_stream
 from app.services.rag_pipeline import ingest, query, retrieve
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _apply_input_guardrails(question: str) -> str:
+    """Prompt-injection check + PII redaction on the incoming question. Raises
+    HTTPException (400) if the question is blocked; otherwise returns the (possibly
+    PII-redacted) question to use for retrieval and generation."""
+    settings = get_settings()
+
+    if settings.guardrails_prompt_injection_enabled:
+        try:
+            check_prompt_injection(question)
+        except PromptInjectionDetected as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if settings.guardrails_pii_redaction_enabled:
+        redacted, pii_types = redact_pii(question)
+        if pii_types:
+            logger.warning("Redacted PII types %s from incoming question", pii_types)
+        return redacted
+
+    return question
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -51,15 +78,17 @@ def chat(request: ChatRequest) -> ChatResponse:
     if not request.question.strip():
         raise HTTPException(status_code=400, detail="question must not be empty")
 
+    question = _apply_input_guardrails(request.question)
+
     try:
         result = query(
-            request.question,
+            question,
             top_k=request.top_k,
             temperature=request.temperature,
             top_p=request.top_p,
         )
     except Exception as exc:
-        logger.exception("Query failed for question=%r", request.question)
+        logger.exception("Query failed for question=%r", question)
         raise HTTPException(status_code=500, detail=f"Query failed: {exc}") from exc
 
     return ChatResponse(
@@ -79,15 +108,17 @@ def chat_stream(request: ChatRequest) -> StreamingResponse:
     if not request.question.strip():
         raise HTTPException(status_code=400, detail="question must not be empty")
 
+    question = _apply_input_guardrails(request.question)
+
     def event_stream():
         try:
-            sources = retrieve(request.question, top_k=request.top_k)
+            sources = retrieve(question, top_k=request.top_k)
             yield _sse(
                 {"type": "sources", "sources": [asdict(source) for source in sources]}
             )
 
             for token in generate_answer_stream(
-                request.question,
+                question,
                 [source.text for source in sources],
                 temperature=request.temperature,
                 top_p=request.top_p,
@@ -96,7 +127,7 @@ def chat_stream(request: ChatRequest) -> StreamingResponse:
 
             yield _sse({"type": "done"})
         except Exception as exc:
-            logger.exception("Streaming query failed for question=%r", request.question)
+            logger.exception("Streaming query failed for question=%r", question)
             yield _sse({"type": "error", "detail": str(exc)})
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")

@@ -2,6 +2,7 @@ import base64
 import logging
 from pathlib import Path
 
+from langsmith import traceable
 from openai import AzureOpenAI, OpenAI
 
 from app.config.settings import get_settings
@@ -66,6 +67,7 @@ def _caption_with_openai(image_path: Path) -> str:
     return (response.choices[0].message.content or "").strip()
 
 
+@traceable(name="caption_image", run_type="llm")
 def caption_image(image_path: Path) -> str:
     """Caption an image via the Azure OpenAI vision deployment (default: gpt-5-mini).
     Falls back to OpenAI directly if the Azure deployment rejects the request, e.g.

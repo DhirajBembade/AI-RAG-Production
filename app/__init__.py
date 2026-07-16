@@ -1,5 +1,12 @@
 import os
 
+from dotenv import load_dotenv
+
+# Load .env into the real process environment (not just our pydantic Settings) so
+# libraries that read os.environ directly — notably LangSmith's LANGCHAIN_* tracing
+# vars — pick it up too. Must run before those libraries are imported anywhere.
+load_dotenv()
+
 # faiss (OpenMP) and torch (bundles its own OpenMP runtime, pulled in by the
 # sentence-transformers reranker) segfault when both are loaded into the same process
 # on macOS — their bundled OpenMP runtimes collide. Must be set before either library
