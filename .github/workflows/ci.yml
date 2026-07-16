@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - develop
+      - "feature/**"
+      - "release/**"
+      - "hotfix/**"
+
+jobs:
+  lint-test-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Lint (flake8)
+        run: uv run flake8 app tests scripts conftest.py streamlit_app.py
+
+      - name: Format check (black)
+        run: uv run black --check app tests scripts conftest.py streamlit_app.py
+
+      - name: Unit tests (pytest)
+        run: uv run pytest -q
+
+      - name: Security scan (bandit)
+        run: uv run bandit -r app -q
+
+      - name: Dependency vulnerability scan (pip-audit)
+        run: uv run pip-audit
+        # ML dependencies (torch/transformers/etc.) frequently carry noisy/low-severity
+        # transitive CVEs; treat this as informational rather than a hard merge-blocker.
+        continue-on-error: true
+
+      - name: Build Docker image
+        run: docker build -t ai-rag-production:ci .

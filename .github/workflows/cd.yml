@@ -1,0 +1,90 @@
+name: CD
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.image.outputs.name }}
+      tag: ${{ steps.image.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute image name/tag
+        id: image
+        run: |
+          name="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build image
+        run: |
+          docker build \
+            -t ${{ steps.image.outputs.name }}:${{ steps.image.outputs.tag }} \
+            -t ${{ steps.image.outputs.name }}:latest .
+
+      - name: Smoke test container
+        run: |
+          docker run -d --name smoke-test -p 8000:8000 ${{ steps.image.outputs.name }}:latest
+          for i in $(seq 1 15); do
+            if curl -sf http://localhost:8000/health; then echo "container is healthy"; break; fi
+            sleep 2
+          done
+          curl -sf http://localhost:8000/health
+          docker stop smoke-test
+
+      - name: Push image
+        run: |
+          docker push ${{ steps.image.outputs.name }}:${{ steps.image.outputs.tag }}
+          docker push ${{ steps.image.outputs.name }}:latest
+
+  # deploy-* stages are placeholders: real deploy commands need real infra (Azure/AWS/K8s)
+  # that this project doesn't have yet. Wire in the commented commands once you do. Create
+  # the "development"/"staging"/"production" GitHub Environments (Settings > Environments)
+  # with required reviewers on staging/production to get real manual-approval gates here.
+
+  deploy-dev:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: development
+    steps:
+      - name: Deploy to Development
+        run: |
+          echo "Deploying ${{ needs.build-and-push.outputs.image }}:${{ needs.build-and-push.outputs.tag }} to Development"
+          # TODO: replace with a real deploy command, e.g.:
+          #   az webapp deploy --resource-group <rg> --name <app> --type docker \
+          #     --docker-custom-image-name ${{ needs.build-and-push.outputs.image }}:latest
+          #   kubectl set image deployment/ai-rag-production api=${{ needs.build-and-push.outputs.image }}:latest
+
+  deploy-staging:
+    needs: [build-and-push, deploy-dev]
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Deploy to Staging
+        run: |
+          echo "Deploying ${{ needs.build-and-push.outputs.image }}:${{ needs.build-and-push.outputs.tag }} to Staging"
+
+  deploy-prod:
+    needs: [build-and-push, deploy-staging]
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Deploy to Production
+        run: |
+          echo "Deploying ${{ needs.build-and-push.outputs.image }}:${{ needs.build-and-push.outputs.tag }} to Production"

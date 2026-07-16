@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+
+# Environment variables — never commit real secrets
+.env
+
+# FAISS index + vector store artifacts (regenerable via ingestion)
+embeddings/*.index
+embeddings/*.meta.json
+
+# Extracted PDF images and metadata DB (regenerable via ingestion)
+data/extracted_images/
+data/metadata.db
+
+# Logs
+logs/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
