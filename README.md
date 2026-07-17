@@ -6,7 +6,7 @@ suite, real CI/CD, and a real git branching workflow — not just a notebook dem
 
 **What it does:** upload a PDF → extract its text, OCR any scanned/image-heavy pages, caption
 every diagram/figure with a vision model → chunk, embed, and index everything → ask questions
-and get answers grounded in retrieved, reranked context, streamed token-by-token.
+and get answers grounded in retrieved, reranked context, streamed token-by-token..
 
 ## Architecture
 
